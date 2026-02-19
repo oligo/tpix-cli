@@ -1,0 +1,280 @@
+package main
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/oligo/tpix-cli/config"
+	"github.com/spf13/cobra"
+)
+
+// parsePkgSpec parses a package spec in the format @namespace/name:version
+// Returns namespace, name, and version (version may be empty)
+func parsePkgSpec(pkgSpec string) (namespace, name, version string) {
+	// Remove leading @ and split on /
+	s := strings.TrimPrefix(pkgSpec, "@")
+	parts := strings.SplitN(s, "/", 2)
+	if len(parts) < 2 {
+		return
+	}
+	namespace = parts[0]
+
+	// Split name and version on :
+	nameVer := strings.SplitN(parts[1], ":", 2)
+	name = nameVer[0]
+	if len(nameVer) > 1 {
+		version = nameVer[1]
+	}
+	return
+}
+
+func loginCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "Login the tpix server",
+		Long:  "Login the tpix server. User is required to login for all other operations",
+		Args:  cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			token, err := DeviceLogin(tpixServer)
+			if err != nil {
+				fmt.Printf("Login failed: %v\n", err)
+				return err
+			}
+
+			config.AppConfig.AccessToken = token
+			config.Save()
+			fmt.Printf("\n\nSuccess! Access token saved\n")
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+// searchPkgCmd searches Typst packages from TPIX server.
+func searchPkgCmd() *cobra.Command {
+	var namespace string
+	var limit int
+
+	cmd := &cobra.Command{
+		Use:   "search <query>",
+		Short: "Search for Typst packages",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			query := args[0]
+
+			result, err := searchPackages(query, namespace, limit)
+			if err != nil {
+				fmt.Printf("failed to search packages: %v", err)
+				return nil
+			}
+
+			fmt.Printf("Found %d results for '%s':\n\n", result.Count, query)
+			for _, r := range result.Results {
+				fmt.Printf("@%s/%s - %s\n", r.Namespace, r.Name, r.Description)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "Filter by namespace")
+	cmd.Flags().IntVarP(&limit, "limit", "l", 20, "Limit number of results")
+
+	return cmd
+}
+
+// getPkgCmd download Typst packages from TPIX server.
+func getPkgCmd() *cobra.Command {
+	var output string
+
+	cmd := &cobra.Command{
+		Use:   "get <namespace/name:version>",
+		Short: "Download a package from TPIX server",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			pkgSpec := args[0]
+
+			// Parse namespace/name:version
+			namespace, name, version := parsePkgSpec(pkgSpec)
+
+			if version == "" {
+				// Get latest version first
+				pkg, err := fetchPackage(namespace, name)
+				if err != nil {
+					return err
+				}
+				if len(pkg.Versions) == 0 {
+					return fmt.Errorf("no versions available for package")
+				}
+				version = pkg.Versions[len(pkg.Versions)-1].Version
+			}
+
+			fmt.Printf("Downloading @%s/%s version %s...\n", namespace, name, version)
+
+			if err := downloadPackage(namespace, name, version, output); err != nil {
+				return err
+			}
+
+			cacheDir := config.AppConfig.TypstCachePkgPath
+			if output != "" {
+				fmt.Printf("Archive saved to: %s\n", output)
+			}
+			if cacheDir != "" {
+				fmt.Printf("Package extracted to: %s\n", filepath.Join(cacheDir, namespace, name, version))
+			}
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&output, "output", "o", "", "Output file path")
+
+	return cmd
+}
+
+// listCachedCmd lists locally cached/downloaded packages.
+func listCachedCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List locally cached packages",
+		Long:  "List all packages downloaded and cached in the local package cache",
+		Args:  cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cacheDir := config.AppConfig.TypstCachePkgPath
+			if cacheDir == "" {
+				return fmt.Errorf("typst cache directory not configured")
+			}
+
+			entries, err := os.ReadDir(cacheDir)
+			if err != nil {
+				return fmt.Errorf("failed to read cache directory: %w", err)
+			}
+
+			var count int
+			fmt.Printf("Cached packages in %s:\n\n", cacheDir)
+
+			for _, namespace := range entries {
+				if !namespace.IsDir() {
+					continue
+				}
+				namespacePath := filepath.Join(cacheDir, namespace.Name())
+				pkgs, err := os.ReadDir(namespacePath)
+				if err != nil {
+					continue
+				}
+				for _, pkg := range pkgs {
+					if !pkg.IsDir() {
+						continue
+					}
+					pkgPath := filepath.Join(namespacePath, pkg.Name())
+					versions, err := os.ReadDir(pkgPath)
+					if err != nil {
+						continue
+					}
+					for _, version := range versions {
+						if !version.IsDir() {
+							continue
+						}
+						count++
+						fmt.Printf("@%s/%s:%s\n", namespace.Name(), pkg.Name(), version.Name())
+					}
+				}
+			}
+
+			fmt.Printf("\nTotal: %d packages\n", count)
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+// removeCachedCmd removes a cached package.
+func removeCachedCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remove <namespace/name:version>",
+		Short: "Remove a cached package",
+		Long:  "Remove a locally cached package from the cache directory",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			pkgSpec := args[0]
+			namespace, name, version := parsePkgSpec(pkgSpec)
+
+			if namespace == "" || name == "" || version == "" {
+				fmt.Println("invalid package spec: use format @namespace/name:version")
+				return
+			}
+
+			cacheDir := config.AppConfig.TypstCachePkgPath
+			if cacheDir == "" {
+				fmt.Println("typst cache directory not configured")
+				return
+			}
+
+			pkgDir := filepath.Join(cacheDir, namespace, name, version)
+
+			// Check if the package exists
+			info, err := os.Stat(pkgDir)
+			if err != nil {
+				if os.IsNotExist(err) {
+					fmt.Printf("package @%s/%s:%s not found in cache", namespace, name, version)
+					return
+				}
+				fmt.Printf("failed to check package: %v", err)
+				return
+			}
+			if !info.IsDir() {
+				fmt.Printf("package @%s/%s:%s is not a directory", namespace, name, version)
+				return
+			}
+
+			if err := os.RemoveAll(pkgDir); err != nil {
+				fmt.Printf("failed to remove package: %v", err)
+				return
+			}
+
+			fmt.Printf("Removed @%s/%s:%s from cache\n", namespace, name, version)
+			return
+		},
+	}
+
+	return cmd
+}
+
+// queryPkgCmd query package detail from TPIX server.
+func queryPkgCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "info <namespace/name>",
+		Short: "Show detailed information about a package",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			pkgSpec := args[0]
+
+			// Parse namespace/name
+			namespace, name, _ := parsePkgSpec(pkgSpec)
+
+			pkg, err := fetchPackage(namespace, name)
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("Package: @%s/%s\n\n", namespace, name)
+			fmt.Printf("Description: %s\n", pkg.Description)
+			fmt.Printf("Website: %s\n", pkg.HomepageURL)
+			fmt.Printf("Repository: %s\n", pkg.RepositoryURL)
+			fmt.Printf("License: %s\n", pkg.License)
+			fmt.Printf("\nVersions:\n")
+			for _, v := range pkg.Versions {
+				fmt.Printf("  %s (Typst: %s)\n", v.Version, v.TypstVersion)
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
