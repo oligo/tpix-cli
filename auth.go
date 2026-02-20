@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -59,12 +60,14 @@ func DeviceLogin(serverURL string) (string, error) {
 	ticker := time.NewTicker(pollInterval)
 	defer ticker.Stop()
 
+	hostname, _ := os.Hostname()
+
 	for {
 		select {
 		case <-timeout:
 			return "", fmt.Errorf("device code expired, please try again.")
 		case <-ticker.C:
-			token, pending, err := pollForToken(serverURL, deviceResp.DeviceCode)
+			token, pending, err := pollForToken(serverURL, deviceResp.DeviceCode, hostname)
 			if err != nil {
 				return "", err
 			}
@@ -76,8 +79,11 @@ func DeviceLogin(serverURL string) (string, error) {
 	}
 }
 
-func pollForToken(serverURL, deviceCode string) (string, bool, error) {
-	reqBody, _ := json.Marshal(map[string]string{"device_code": deviceCode})
+func pollForToken(serverURL, deviceCode string, hostname string) (string, bool, error) {
+	reqBody, _ := json.Marshal(map[string]string{
+		"device_code": deviceCode,
+		"hostname":    hostname,
+	})
 	resp, err := http.Post(
 		serverURL+"/auth/device/token",
 		"application/json",

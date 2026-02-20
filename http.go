@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	tpixServer          = "http://localhost:8082"
 	TpixClientUserAgent = "tpix-client/v1.0.0"
 )
 

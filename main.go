@@ -6,7 +6,6 @@ import (
 )
 
 var (
-	tpixServer = "http://localhost:8082"
 	rootCmd    = cobra.Command{
 		Use:   "tpix-cli",
 		Short: "A tpix command line client used to manage Typst packages",
