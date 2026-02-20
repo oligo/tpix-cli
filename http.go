@@ -92,7 +92,7 @@ func searchPackages(query, namespace string, limit int) (*SearchResponse, error)
 
 // downloadPackage downloads a package, extracts it to the cache directory,
 // and optionally saves the archive to output path.
-func downloadPackage(namespace, name, version, output string) error {
+func downloadPackage(namespace, name, version string) error {
 	url := fmt.Sprintf("%s/api/v1/download/%s/%s/%s", tpixServer, namespace, name, version)
 
 	resp, err := makeRequest("GET", url)
@@ -129,13 +129,6 @@ func downloadPackage(namespace, name, version, output string) error {
 	extractDir := filepath.Join(cacheDir, namespace, name, version)
 	if err := extractTarGz(tmpPath, extractDir); err != nil {
 		return fmt.Errorf("failed to extract package: %w", err)
-	}
-
-	// Optionally save the archive
-	if output != "" {
-		if err := copyFile(tmpPath, output); err != nil {
-			return fmt.Errorf("failed to save archive: %w", err)
-		}
 	}
 
 	return nil

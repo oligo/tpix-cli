@@ -89,8 +89,6 @@ func searchPkgCmd() *cobra.Command {
 
 // getPkgCmd download Typst packages from TPIX server.
 func getPkgCmd() *cobra.Command {
-	var output string
-
 	cmd := &cobra.Command{
 		Use:   "get <namespace/name:version>",
 		Short: "Download a package from TPIX server",
@@ -115,22 +113,18 @@ func getPkgCmd() *cobra.Command {
 
 			fmt.Printf("Downloading @%s/%s version %s...\n", namespace, name, version)
 
-			if err := downloadPackage(namespace, name, version, output); err != nil {
+			if err := downloadPackage(namespace, name, version); err != nil {
 				return err
 			}
 
 			cacheDir := config.AppConfig.TypstCachePkgPath
-			if output != "" {
-				fmt.Printf("Archive saved to: %s\n", output)
-			}
+
 			if cacheDir != "" {
 				fmt.Printf("Package extracted to: %s\n", filepath.Join(cacheDir, namespace, name, version))
 			}
 			return nil
 		},
 	}
-
-	cmd.Flags().StringVarP(&output, "output", "o", "", "Output file path")
 
 	return cmd
 }
@@ -238,7 +232,6 @@ func removeCachedCmd() *cobra.Command {
 			}
 
 			fmt.Printf("Removed @%s/%s:%s from cache\n", namespace, name, version)
-			return
 		},
 	}
 
