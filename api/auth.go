@@ -1,4 +1,4 @@
-package main
+package api
 
 import (
 	"bytes"
@@ -14,27 +14,9 @@ const (
 	pollInterval = 5 * time.Second
 )
 
-type DeviceCodeResponse struct {
-	DeviceCode      string `json:"device_code"`
-	UserCode        string `json:"user_code"`
-	VerificationURI string `json:"verification_uri"`
-	ExpiresIn       int    `json:"expires_in"`
-}
-
-type TokenResponse struct {
-	AccessToken string `json:"access_token"`
-	TokenType   string `json:"token_type"`
-	ExpiresIn   int    `json:"expires_in"`
-}
-
-type ErrorResponse struct {
-	Error       string `json:"error"`
-	Description string `json:"description"`
-}
-
-func DeviceLogin(serverURL string) (string, error) {
+func DeviceLogin() (string, error) {
 	// Initiate device flow
-	resp, err := http.Post(serverURL+"/auth/device/code", "application/json", nil)
+	resp, err := makeRequest("POST", "/auth/device/code", nil, "")
 	if err != nil {
 		return "", err
 	}
@@ -67,7 +49,7 @@ func DeviceLogin(serverURL string) (string, error) {
 		case <-timeout:
 			return "", fmt.Errorf("device code expired, please try again.")
 		case <-ticker.C:
-			token, pending, err := pollForToken(serverURL, deviceResp.DeviceCode, hostname)
+			token, pending, err := pollForToken(deviceResp.DeviceCode, hostname)
 			if err != nil {
 				return "", err
 			}
@@ -79,16 +61,13 @@ func DeviceLogin(serverURL string) (string, error) {
 	}
 }
 
-func pollForToken(serverURL, deviceCode string, hostname string) (string, bool, error) {
+func pollForToken(deviceCode string, hostname string) (string, bool, error) {
 	reqBody, _ := json.Marshal(map[string]string{
 		"device_code": deviceCode,
 		"hostname":    hostname,
 	})
-	resp, err := http.Post(
-		serverURL+"/auth/device/token",
-		"application/json",
-		bytes.NewBuffer(reqBody),
-	)
+
+	resp, err := makeRequest("POST", "/auth/device/token", bytes.NewBuffer(reqBody), "application/json")
 	if err != nil {
 		return "", false, err
 	}

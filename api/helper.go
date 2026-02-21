@@ -1,9 +1,14 @@
-package main
+package api
 
 import (
+	"fmt"
+	"io"
+	"net/http"
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/oligo/tpix-cli/config"
 )
 
 // https://gist.github.com/sevkin/9798d67b2cb9d07cb05f89f14ba682f8
@@ -46,4 +51,24 @@ func isWSL() bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(string(releaseData)), "microsoft")
+}
+
+// Helper function to create HTTP request with Bearer token
+func makeRequest(method, url string, body io.Reader, contentType string) (*http.Response, error) {
+	apiUrl := fmt.Sprintf("%s%s", TpixServer, url)
+	req, err := http.NewRequest(method, apiUrl, body)
+	if err != nil {
+		return nil, err
+	}
+
+	if config.AppConfig.AccessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+config.AppConfig.AccessToken)
+	}
+
+	req.Header.Set("User-Agent", TpixClientUserAgent)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+
+	return http.DefaultClient.Do(req)
 }

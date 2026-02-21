@@ -1,0 +1,76 @@
+package api
+
+import "time"
+
+// API response types
+
+type SearchResponse struct {
+	Query   string         `json:"query"`
+	Count   int            `json:"count"`
+	Results []SearchResult `json:"results"`
+}
+
+type SearchResult struct {
+	Namespace   string `json:"namespace"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// PackageResponse represents a package details response
+type PackageResponse struct {
+	ID            string               `json:"id"`
+	Name          string               `json:"name"`
+	Namespace     string               `json:"namespace"`
+	Description   string               `json:"description"`
+	HomepageURL   string               `json:"homepage_url"`
+	RepositoryURL string               `json:"repository_url"`
+	License       string               `json:"license"`
+	CreatedAt     *time.Time           `json:"created_at"`
+	UpdatedAt     *time.Time           `json:"updated_at"`
+	LatestVersion PackageVersionInfo   `json:"latest_version"`
+	Versions      []PackageVersionInfo `json:"versions"`
+}
+
+// PackageVersionInfo represents package version information
+type PackageVersionInfo struct {
+	Version      string     `json:"version"`
+	TypstVersion string     `json:"typst_version"`
+	SHA256       string     `json:"sha256"`
+	PublishedAt  *time.Time `json:"published_at"`
+}
+
+// PackageVersionsResponse represents the response from the versions endpoint
+type PackageVersionsResponse struct {
+	Versions []PackageVersionInfo `json:"versions"`
+}
+
+// UploadResponse represents an upload response.
+// When the package validation does not pass, only ValidateReport
+// is returned.
+type UploadResponse struct {
+	SHA256         string   `json:"sha256"`
+	Namespace      string   `json:"namespace"`
+	Package        string   `json:"package"`
+	Version        string   `json:"version"`
+	Size           int64    `json:"size"`
+	ValidateReport []string `json:"report"`
+}
+
+// ErrorResponse represents a standard error response
+type ErrorResponse struct {
+	Error       string `json:"error"`
+	Description string `json:"description"`
+}
+
+type DeviceCodeResponse struct {
+	DeviceCode      string `json:"device_code"`
+	UserCode        string `json:"user_code"`
+	VerificationURI string `json:"verification_uri"`
+	ExpiresIn       int    `json:"expires_in"`
+}
+
+type TokenResponse struct {
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresIn   int    `json:"expires_in"`
+}

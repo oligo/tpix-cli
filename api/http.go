@@ -1,69 +1,28 @@
-package main
+package api
 
 import (
 	"archive/tar"
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/oligo/tpix-cli/config"
 )
 
 const (
-	tpixServer          = "http://localhost:8082"
+	TpixServer          = "http://localhost:8082"
 	TpixClientUserAgent = "tpix-client/v1.0.0"
 )
 
-// API response types
-
-type SearchResponse struct {
-	Query   string         `json:"query"`
-	Count   int            `json:"count"`
-	Results []SearchResult `json:"results"`
-}
-
-type SearchResult struct {
-	Namespace   string `json:"namespace"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-}
-
-// PackageResponse represents a package details response
-type PackageResponse struct {
-	ID            string               `json:"id"`
-	Name          string               `json:"name"`
-	Namespace     string               `json:"namespace"`
-	Description   string               `json:"description"`
-	HomepageURL   string               `json:"homepage_url"`
-	RepositoryURL string               `json:"repository_url"`
-	License       string               `json:"license"`
-	CreatedAt     *time.Time           `json:"created_at"`
-	UpdatedAt     *time.Time           `json:"updated_at"`
-	LatestVersion PackageVersionInfo   `json:"latest_version"`
-	Versions      []PackageVersionInfo `json:"versions"`
-}
-
-// PackageVersionInfo represents package version information
-type PackageVersionInfo struct {
-	Version      string     `json:"version"`
-	TypstVersion string     `json:"typst_version"`
-	SHA256       string     `json:"sha256"`
-	PublishedAt  *time.Time `json:"published_at"`
-}
-
-// PackageVersionsResponse represents the response from the versions endpoint
-type PackageVersionsResponse struct {
-	Versions []PackageVersionInfo `json:"versions"`
-}
-
-// searchPackages fetches packages matching a query from the TPIX server.
-func searchPackages(query, namespace string, limit int) (*SearchResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/search?q=%s", tpixServer, query)
+// SearchPackages fetches packages matching a query from the TPIX server.
+func SearchPackages(query, namespace string, limit int) (*SearchResponse, error) {
+	url := fmt.Sprintf("/api/v1/search?q=%s", query)
 	if namespace != "" {
 		url += "&namespace=" + namespace
 	}
@@ -71,7 +30,7 @@ func searchPackages(query, namespace string, limit int) (*SearchResponse, error)
 		url += fmt.Sprintf("&limit=%d", limit)
 	}
 
-	resp, err := makeRequest("GET", url)
+	resp, err := makeRequest("GET", url, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to search packages: %w", err)
 	}
@@ -90,12 +49,12 @@ func searchPackages(query, namespace string, limit int) (*SearchResponse, error)
 	return &result, nil
 }
 
-// downloadPackage downloads a package, extracts it to the cache directory,
+// DownloadPackage downloads a package, extracts it to the cache directory,
 // and optionally saves the archive to output path.
-func downloadPackage(namespace, name, version string) error {
-	url := fmt.Sprintf("%s/api/v1/download/%s/%s/%s", tpixServer, namespace, name, version)
+func DownloadPackage(namespace, name, version string) error {
+	url := fmt.Sprintf("/api/v1/download/%s/%s/%s", namespace, name, version)
 
-	resp, err := makeRequest("GET", url)
+	resp, err := makeRequest("GET", url, nil, "")
 	if err != nil {
 		return fmt.Errorf("failed to download package: %w", err)
 	}
@@ -186,28 +145,10 @@ func extractTarGz(archivePath, destDir string) error {
 	return nil
 }
 
-// copyFile copies a file from src to dst.
-func copyFile(src, dst string) error {
-	sourceFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer sourceFile.Close()
-
-	destFile, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer destFile.Close()
-
-	_, err = io.Copy(destFile, sourceFile)
-	return err
-}
-
-// fetchPackage fetches package details from the TPIX server.
-func fetchPackage(namespace, name string) (*PackageResponse, error) {
-	url := fmt.Sprintf("%s/api/v1/packages/%s/%s", tpixServer, namespace, name)
-	resp, err := makeRequest("GET", url)
+// FetchPackage fetches package details from the TPIX server.
+func FetchPackage(namespace, name string) (*PackageResponse, error) {
+	url := fmt.Sprintf("/api/v1/packages/%s/%s", namespace, name)
+	resp, err := makeRequest("GET", url, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch package: %w", err)
 	}
@@ -232,10 +173,10 @@ func fetchPackage(namespace, name string) (*PackageResponse, error) {
 	return &pkg, nil
 }
 
-// fetchPackageVersions fetches all versions for a package.
+// FetchPackageVersions fetches all versions for a package.
 func fetchPackageVersions(namespace, name string) ([]PackageVersionInfo, error) {
-	url := fmt.Sprintf("%s/api/v1/packages/%s/%s/versions", tpixServer, namespace, name)
-	resp, err := makeRequest("GET", url)
+	url := fmt.Sprintf("/api/v1/packages/%s/%s/versions", namespace, name)
+	resp, err := makeRequest("GET", url, nil, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch versions: %w", err)
 	}
@@ -254,18 +195,61 @@ func fetchPackageVersions(namespace, name string) ([]PackageVersionInfo, error) 
 	return versionsResp.Versions, nil
 }
 
-// Helper function to create HTTP request with Bearer token
-func makeRequest(method, url string) (*http.Response, error) {
-	req, err := http.NewRequest(method, url, nil)
+// UploadPackage uploads a package to the TPIX server.
+func UploadPackage(packagePath, namespace string) (*UploadResponse, error) {
+	file, err := os.Open(packagePath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open package file: %w", err)
+	}
+	defer file.Close()
+
+	// Get file info
+	fileInfo, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get file info: %w", err)
 	}
 
-	if config.AppConfig.AccessToken != "" {
-		req.Header.Set("Authorization", "Bearer "+config.AppConfig.AccessToken)
+	// Create multipart form
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	// Add file field
+	part, err := writer.CreateFormFile("file", fileInfo.Name())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create form file: %w", err)
 	}
 
-	req.Header.Set("User-Agent", TpixClientUserAgent)
+	if _, err := io.Copy(part, file); err != nil {
+		return nil, fmt.Errorf("failed to copy file: %w", err)
+	}
 
-	return http.DefaultClient.Do(req)
+	if err := writer.WriteField("namespace", namespace); err != nil {
+		return nil, fmt.Errorf("failed to write namespace field: %w", err)
+	}
+
+	writer.Close()
+
+	// Create request
+	url := "/api/v1/packages/upload"
+	resp, err := makeRequest("POST", url, &buf, writer.FormDataContentType())
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload package: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, fmt.Errorf("upload failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	var uploadResp UploadResponse
+	if err := json.Unmarshal(body, &uploadResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return &uploadResp, nil
 }

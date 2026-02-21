@@ -24,6 +24,8 @@ func main() {
 	rootCmd.AddCommand(queryPkgCmd())
 	rootCmd.AddCommand(listCachedCmd())
 	rootCmd.AddCommand(removeCachedCmd())
+	rootCmd.AddCommand(bundleCmd())
+	rootCmd.AddCommand(pushCmd())
 
 	rootCmd.Execute()
 }
