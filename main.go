@@ -7,7 +7,7 @@ import (
 
 var (
 	rootCmd    = cobra.Command{
-		Use:   "tpix-cli",
+		Use:   "tpix",
 		Short: "A tpix command line client used to manage Typst packages",
 	}
 )

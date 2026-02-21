@@ -354,7 +354,7 @@ The package must be a valid Typst package archive created with the bundle comman
 
 			// Check if user is logged in
 			if config.AppConfig.AccessToken == "" {
-				return fmt.Errorf("not logged in. Please run 'tpix-cli login' first")
+				return fmt.Errorf("not logged in. Please run 'tpix login' first")
 			}
 
 			fmt.Printf("Uploading %s to namespace %s...\n", packagePath, namespace)
