@@ -13,8 +13,12 @@ Or build from source:
 ```bash
 git clone https://github.com/oligo/tpix-cli.git
 cd tpix-cli
-go build -o tpix .
+make install
 ```
+
+The binary will be built as `tpix` and installed in `/usr/local/bin/` in Linux.
+You can also download pre-built binaries from the [GitHub Releases](https://github.com/oligo/tpix-cli/releases) page.
+
 
 ## Quick Start
 
@@ -125,6 +129,16 @@ tpix push my-package.tar.gz mynamespace
 ```
 
 Requires login first.
+
+### Version & Updates
+
+```bash
+# Check current version and updates
+tpix version
+
+# Update to latest version
+tpix update
+```
 
 ## Configuration
 
