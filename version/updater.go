@@ -77,20 +77,24 @@ func (u *Updater) Latest() (*Release, error) {
 // Update downloads the specified version to disk and replace the
 // current version.
 func (u *Updater) Update() (*DownloadProgress, error) {
-	exePath, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-
-	exeDir := filepath.Dir(exePath)
 
 	if u.latestRelease == nil {
 		return nil, fmt.Errorf("Check if there is a new version first!")
 	}
 
-	dl := newDownloader(u.latestRelease.Asset, exeDir)
+	// Download to temp directory first, then move to final location
+	// This avoids issues with replacing the running executable
+	tempDir, err := os.MkdirTemp("", "tpix-update-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(tempDir)
 
-	progress := dl.Download(func() {})
+	dl := newDownloader(u.latestRelease.Asset, tempDir)
+
+	progress := dl.Download(func() {
+		onDownloadFinished(tempDir)
+	})
 
 	return progress, nil
 }
@@ -134,6 +138,57 @@ func (d *Updater) getRelease() (*Release, error) {
 	}, nil
 }
 
+func onDownloadFinished(tempDir string) {
+	binaryName := "tpix"
+	if runtime.GOOS == "windows" {
+		binaryName = "tpix.exe"
+	}
+
+	newBinPath := filepath.Join(tempDir, binaryName)
+	exePath, err := os.Executable()
+	if err != nil {
+		return
+	}
+
+	// Ensure the new file is executable
+	os.Chmod(newBinPath, 0755)
+
+	if runtime.GOOS == "windows" {
+		// Windows locks the running executable file, rename current to .old, then move new to current
+		oldPath := exePath + ".old"
+		os.Remove(oldPath)
+
+		if err := os.Rename(exePath, oldPath); err != nil {
+			fmt.Printf("Windows: Failed to rename running exe: %v\n", err)
+			return
+		}
+	}
+
+	// Use a robust move/copy
+	err = moveFile(newBinPath, exePath)
+	if err != nil {
+		fmt.Printf("Failed to replace binary: %v\n", err)
+		return
+	}
+
+	fmt.Println("\nUpdate complete! Please restart tpix.")
+}
+
+func moveFile(src, dst string) error {
+	// Try rename first (atomic and fast)
+	err := os.Rename(src, dst)
+	if err == nil {
+		return nil
+	}
+
+	// Fallback to manual copy (handles cross-partition moves)
+	input, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dst, input, 0755)
+}
+
 // compareVersion compares two semantic version string to see
 // if v1 is newer than v2. It returns true if v1 is newer than
 // v2, otherwise it returns false.
@@ -147,7 +202,7 @@ func compareVersion(v1, v2 string) (bool, error) {
 		return false, err
 	}
 
-	return semver.Compare(ver1, ver2) <= 0, nil
+	return semver.Compare(ver1, ver2) > 0, nil
 }
 
 func normVersion(ver string) (string, error) {

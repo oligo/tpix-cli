@@ -99,12 +99,7 @@ func (d *Downloader) Download(onFinished func()) *DownloadProgress {
 
 		if n, err := io.Copy(targetFile, io.TeeReader(resp.Body, progress)); err != nil || n != int64(d.asset.Size) {
 			progress.Err = errors.New("Download error")
-			if onFinished != nil {
-				onFinished()
-			}
 			return
-		} else if onFinished != nil {
-			onFinished()
 		}
 
 		//uncompress, do not return progress until it finishes.
@@ -112,6 +107,10 @@ func (d *Downloader) Download(onFinished func()) *DownloadProgress {
 		if err != nil {
 			progress.Err = err
 			return
+		}
+
+		if onFinished != nil {
+			onFinished()
 		}
 	}()
 
@@ -148,8 +147,8 @@ func (d *Downloader) uncompressTarFile(targetFile *os.File, destDir string) erro
 	}
 	defer gz.Close()
 
-	// Create a tar Reader
-	tr := tar.NewReader(targetFile)
+	// Create a tar Reader from the decompressed stream
+	tr := tar.NewReader(gz)
 	// Iterate through the files in the archive.
 	for {
 		header, err := tr.Next()
