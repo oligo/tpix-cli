@@ -1,6 +1,6 @@
 # TPIX CLI
 
-A command-line client for managing Typst packages on the [TPIX](https://tpix.typstify.com) server.
+A command-line client for managing Typst packages on the [TPIX](https://tpix.typstify.com) server(Coming soon).
 
 ## Installation
 
