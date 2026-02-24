@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/oligo/tpix-cli/utils"
 )
 
 const (
@@ -35,7 +37,7 @@ func DeviceLogin() (string, error) {
 	fmt.Printf("If the browser does not open, please open the above URL manually.")
 
 	// open the url for user
-	openURL(deviceResp.VerificationURI)
+	utils.OpenURL(deviceResp.VerificationURI)
 
 	// Poll for token
 	timeout := time.After(time.Duration(deviceResp.ExpiresIn) * time.Second)

@@ -26,6 +26,8 @@ func main() {
 	rootCmd.AddCommand(removeCachedCmd())
 	rootCmd.AddCommand(bundleCmd())
 	rootCmd.AddCommand(pushCmd())
+	rootCmd.AddCommand(versionCmd())
+	rootCmd.AddCommand(updateCmd())
 
 	rootCmd.Execute()
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/oligo/tpix-cli/api"
 	"github.com/oligo/tpix-cli/bundler"
 	"github.com/oligo/tpix-cli/config"
+	"github.com/oligo/tpix-cli/version"
 	"github.com/spf13/cobra"
 )
 
@@ -372,6 +373,97 @@ The package must be a valid Typst package archive created with the bundle comman
 					fmt.Printf("\t%s\n", r)
 				}
 			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+// versionCmd shows the current version and checks for updates.
+func versionCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "version",
+		Short: "Show version information",
+		Long:  "Show the current version of tpix-cli and check for available updates",
+		Args:  cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Printf("tpix-cli version %s\n", version.FormatedVersion())
+
+			// Check for updates
+			updater := &version.Updater{}
+			hasUpdate, err := updater.Check()
+			if err != nil {
+				// Don't fail if update check fails, just warn
+				fmt.Printf("\nWarning: could not check for updates: %v\n", err)
+				return nil
+			}
+
+			if hasUpdate {
+				latest, err := updater.Latest()
+				if err != nil {
+					fmt.Printf("\nWarning: could not get latest version info: %v\n", err)
+					return nil
+				}
+				fmt.Printf("\nA new version is available: %s\n", latest.Version)
+				fmt.Printf("Run 'tpix update' to upgrade\n")
+			} else {
+				fmt.Printf("\nYou are running the latest version.\n")
+			}
+
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+// updateCmd upgrades tpix-cli to the latest version.
+func updateCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update tpix-cli to the latest version",
+		Long:  "Download and install the latest version of tpix-cli from GitHub releases",
+		Args:  cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Println("Checking for updates...")
+
+			updater := &version.Updater{}
+			hasUpdate, err := updater.Check()
+			if err != nil {
+				return fmt.Errorf("failed to check for updates: %w", err)
+			}
+
+			if !hasUpdate {
+				fmt.Println("You are already running the latest version.")
+				return nil
+			}
+
+			latest, err := updater.Latest()
+			if err != nil {
+				return fmt.Errorf("failed to get latest version info: %w", err)
+			}
+
+			fmt.Printf("Downloading version %s...\n", latest.Version)
+
+			progress, err := updater.Update()
+			if err != nil {
+				return fmt.Errorf("failed to update: %w", err)
+			}
+
+			// Wait for download to complete
+			for progress.Err == nil && progress.Progress() < 1.0 {
+				// Simple progress indicator
+				fmt.Printf("\rDownloading... %.1f%%", progress.Progress()*100)
+			}
+			fmt.Println("\rDownloading... 100%")
+
+			if progress.Err != nil {
+				return fmt.Errorf("download failed: %w", progress.Err)
+			}
+
+			fmt.Printf("\nSuccessfully updated to version %s\n", latest.Version)
 
 			return nil
 		},
