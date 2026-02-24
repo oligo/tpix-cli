@@ -88,12 +88,12 @@ func (u *Updater) Update() (*DownloadProgress, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(tempDir)
 
 	dl := newDownloader(u.latestRelease.Asset, tempDir)
 
 	progress := dl.Download(func() {
 		onDownloadFinished(tempDir)
+		os.RemoveAll(tempDir)
 	})
 
 	return progress, nil
@@ -170,11 +170,13 @@ func onDownloadFinished(tempDir string) {
 		fmt.Printf("Failed to replace binary: %v\n", err)
 		return
 	}
-
-	fmt.Println("\nUpdate complete! Please restart tpix.")
 }
 
 func moveFile(src, dst string) error {
+	//  Remove the existing binary first to avoid "text file busy"
+	// Even if it's running, removing it unlinks the name from the inode.
+	_ = os.Remove(dst)
+
 	// Try rename first (atomic and fast)
 	err := os.Rename(src, dst)
 	if err == nil {

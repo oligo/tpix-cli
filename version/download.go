@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"archive/tar"
@@ -18,19 +19,28 @@ import (
 // DownloadCounter counts the number of bytes written to it. It implements to the io.Writer interface
 // and we can pass this into io.TeeReader() which will report progress on each write cycle.
 type DownloadProgress struct {
-	finished uint64
-	total    uint64
-	Err      error
+	finished   atomic.Uint64
+	total      uint64
+	reportChan chan float32
+	Err        error
 }
 
 func (dp *DownloadProgress) Write(p []byte) (int, error) {
 	n := len(p)
-	dp.finished += uint64(n)
+	dp.finished.Add(uint64(n))
+
+	// compute progress
+	progress := float32(dp.finished.Load()) / float32(dp.total)
+	dp.reportChan <- progress
 	return n, nil
 }
 
-func (dp *DownloadProgress) Progress() float32 {
-	return float32(dp.finished) / float32(dp.total)
+func (dp *DownloadProgress) Progress() chan float32 {
+	return dp.reportChan
+}
+
+func (dp *DownloadProgress) Done() {
+	close(dp.reportChan)
 }
 
 // Downloader check and download the latest version of TPIX CLI.
@@ -38,6 +48,13 @@ type Downloader struct {
 	asset   Asset
 	destDir string
 	client  *http.Client
+}
+
+func newDownloadProgress(total uint64) *DownloadProgress {
+	return &DownloadProgress{
+		total:      total,
+		reportChan: make(chan float32, 5),
+	}
 }
 
 func newDownloader(asset Asset, destDir string) *Downloader {
@@ -68,11 +85,10 @@ func (d *Downloader) get(url string) (*http.Response, error) {
 
 // Download downloads the release file in async manner, and reports its progress.
 func (d *Downloader) Download(onFinished func()) *DownloadProgress {
-	progress := &DownloadProgress{}
+	progress := newDownloadProgress(uint64(d.asset.Size))
 
 	go func() {
-		progress.total = uint64(d.asset.Size)
-
+		defer progress.Done()
 		// download the asset
 		resp, err := d.get(d.asset.DownloadURL)
 		if err != nil {
@@ -80,16 +96,8 @@ func (d *Downloader) Download(onFinished func()) *DownloadProgress {
 			return
 		}
 
-		tempDir, err := os.MkdirTemp("", "tpix-cli-*")
-		if err != nil {
-			progress.Err = err
-			return
-		}
-
-		defer os.RemoveAll(tempDir)
-
 		var targetFile *os.File
-		targetFile, err = os.OpenFile(filepath.Join(tempDir, d.asset.Name), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+		targetFile, err = os.OpenFile(filepath.Join(d.destDir, d.asset.Name), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 		if err != nil {
 			progress.Err = err
 			return

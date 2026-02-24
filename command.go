@@ -453,9 +453,9 @@ func updateCmd() *cobra.Command {
 			}
 
 			// Wait for download to complete
-			for progress.Err == nil && progress.Progress() < 1.0 {
+			for ratio := range progress.Progress() {
 				// Simple progress indicator
-				fmt.Printf("\rDownloading... %.1f%%", progress.Progress()*100)
+				fmt.Printf("\rDownloading... %.1f%%", ratio*100)
 			}
 			fmt.Println("\rDownloading... 100%")
 

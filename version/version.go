@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	Version        = "unknown"
+	Version        = "v0.0.0"
 	BuildTime      = "1706890000"
 	BuildGoVersion = "unknown"
 )

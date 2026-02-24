@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	TpixServer          = "http://localhost:8082"
+	TpixServer          = "https://tpix.typstify.com"
 	TpixClientUserAgent = "tpix-client/v1.0.0"
 )
 
