@@ -40,13 +40,14 @@ func loginCmd() *cobra.Command {
 		Long:  "Login the tpix server. User is required to login for all other operations",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			token, err := api.DeviceLogin()
+			tokenResp, err := api.DeviceLogin()
 			if err != nil {
 				fmt.Printf("Login failed: %v\n", err)
 				return err
 			}
 
-			config.AppConfig.AccessToken = token
+			config.AppConfig.AccessToken = tokenResp.AccessToken
+			config.AppConfig.RefreshToken = tokenResp.RefreshToken
 			config.Save()
 			fmt.Printf("\n\nSuccess! Access token saved\n")
 

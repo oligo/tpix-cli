@@ -16,17 +16,17 @@ const (
 	pollInterval = 5 * time.Second
 )
 
-func DeviceLogin() (string, error) {
+func DeviceLogin() (*TokenResponse, error) {
 	// Initiate device flow
 	resp, err := makeRequest("POST", "/auth/device/code", nil, "")
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	var deviceResp DeviceCodeResponse
 	if err := json.NewDecoder(resp.Body).Decode(&deviceResp); err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// Display instructions to user
@@ -49,21 +49,21 @@ func DeviceLogin() (string, error) {
 	for {
 		select {
 		case <-timeout:
-			return "", fmt.Errorf("device code expired, please try again.")
+			return nil, fmt.Errorf("device code expired, please try again.")
 		case <-ticker.C:
-			token, pending, err := pollForToken(deviceResp.DeviceCode, hostname)
+			tokenResp, pending, err := pollForToken(deviceResp.DeviceCode, hostname)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			if !pending {
-				return token, nil
+				return tokenResp, nil
 			}
 			fmt.Print(".")
 		}
 	}
 }
 
-func pollForToken(deviceCode string, hostname string) (string, bool, error) {
+func pollForToken(deviceCode string, hostname string) (*TokenResponse, bool, error) {
 	reqBody, _ := json.Marshal(map[string]string{
 		"device_code": deviceCode,
 		"hostname":    hostname,
@@ -71,7 +71,7 @@ func pollForToken(deviceCode string, hostname string) (string, bool, error) {
 
 	resp, err := makeRequest("POST", "/auth/device/token", bytes.NewBuffer(reqBody), "application/json")
 	if err != nil {
-		return "", false, err
+		return nil, false, err
 	}
 	defer resp.Body.Close()
 
@@ -80,24 +80,24 @@ func pollForToken(deviceCode string, hostname string) (string, bool, error) {
 	if resp.StatusCode == http.StatusOK {
 		var tokenResp TokenResponse
 		if err := json.Unmarshal(body, &tokenResp); err != nil {
-			return "", false, err
+			return nil, false, err
 		}
-		return tokenResp.AccessToken, false, nil
+		return &tokenResp, false, nil
 	}
 
 	var errResp ErrorResponse
 	if err := json.Unmarshal(body, &errResp); err != nil {
-		return "", false, err
+		return nil, false, err
 	}
 
 	switch errResp.Error {
 	case "authorization_pending":
-		return "", true, nil // Keep polling
+		return nil, true, nil // Keep polling
 	case "access_denied":
-		return "", false, fmt.Errorf("authorization denied by user")
+		return nil, false, fmt.Errorf("authorization denied by user")
 	case "expired_token":
-		return "", false, fmt.Errorf("device code expired")
+		return nil, false, fmt.Errorf("device code expired")
 	default:
-		return "", false, fmt.Errorf("error: %s", errResp.Description)
+		return nil, false, fmt.Errorf("error: %s", errResp.Description)
 	}
 }

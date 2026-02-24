@@ -14,6 +14,7 @@ const (
 
 type Config struct {
 	AccessToken       string `json:"accessToken"`
+	RefreshToken      string `json:"refreshToken,omitempty"`
 	TypstCachePkgPath string `json:"typstCachePkgPath"`
 }
 
@@ -57,7 +58,7 @@ func Load() error {
 
 func Save() error {
 	path := filepath.Join(configDir, configFilename)
-	configFile, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
+	configFile, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}
