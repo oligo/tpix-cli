@@ -52,6 +52,7 @@ release: clean
 		rm $$output_name LICENSE; \
 		cd ..; \
 	done
+	@cd $(DIST_DIR) && shasum -a 256 *.tar.gz > checksums.txt; 
 	@echo "Release packages created in $(DIST_DIR)/"
 	@ls -lh $(DIST_DIR)/*.tar.gz
 
