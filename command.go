@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/oligo/tpix-cli/api"
-	"github.com/oligo/tpix-cli/bundler"
-	"github.com/oligo/tpix-cli/config"
-	"github.com/oligo/tpix-cli/version"
+	"github.com/typstify/tpix-cli/api"
+	"github.com/typstify/tpix-cli/bundler"
+	"github.com/typstify/tpix-cli/config"
+	"github.com/typstify/tpix-cli/version"
 	"github.com/spf13/cobra"
 )
 

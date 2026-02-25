@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	latestReleaseUrl = "https://api.github.com/repos/oligo/tpix-cli/releases/latest"
+	latestReleaseUrl = "https://api.github.com/repos/typstify/tpix-cli/releases/latest"
 )
 
 type GithubRelease struct {

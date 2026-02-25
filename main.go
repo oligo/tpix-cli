@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/oligo/tpix-cli/config"
+	"github.com/typstify/tpix-cli/config"
 	"github.com/spf13/cobra"
 )
 

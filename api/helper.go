@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/oligo/tpix-cli/config"
+	"github.com/typstify/tpix-cli/config"
 )
 
 const (

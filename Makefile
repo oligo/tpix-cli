@@ -6,7 +6,7 @@ BUILD_TIME     := $(shell date +%s)
 GO_VERSION     := $(shell go version | cut -d' ' -f3)
 BINARY_NAME    := tpix
 DIST_DIR       := dist
-PKG_PATH       := github.com/oligo/tpix-cli/version
+PKG_PATH       := github.com/typstify/tpix-cli/version
 
 # Setup the -ldflags option
 LDFLAGS := -s -w \

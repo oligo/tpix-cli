@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/oligo/tpix-cli/utils"
+	"github.com/typstify/tpix-cli/utils"
 )
 
 const (

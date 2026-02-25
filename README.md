@@ -5,19 +5,19 @@ A command-line client for managing Typst packages on the [TPIX](https://tpix.typ
 ## Installation
 
 ```bash
-go install github.com/oligo/tpix-cli@latest
+go install github.com//tpix-cli@latest
 ```
 
 Or build from source:
 
 ```bash
-git clone https://github.com/oligo/tpix-cli.git
+git clone https://github.com/typstify/tpix-cli.git
 cd tpix-cli
 make install
 ```
 
 The binary will be built as `tpix` and installed in `/usr/local/bin/` in Linux.
-You can also download pre-built binaries from the [GitHub Releases](https://github.com/oligo/tpix-cli/releases) page.
+You can also download pre-built binaries from the [GitHub Releases](https://github.com/typstify/tpix-cli/releases) page.
 
 
 ## Quick Start

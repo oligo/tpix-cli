@@ -10,8 +10,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/oligo/tpix-cli/config"
-	"github.com/oligo/tpix-cli/utils"
+	"github.com/typstify/tpix-cli/config"
+	"github.com/typstify/tpix-cli/utils"
 )
 
 // SearchPackages fetches packages matching a query from the TPIX server.
