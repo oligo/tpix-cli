@@ -6,11 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/typstify/tpix-cli/api"
 	"github.com/typstify/tpix-cli/bundler"
 	"github.com/typstify/tpix-cli/config"
 	"github.com/typstify/tpix-cli/version"
-	"github.com/spf13/cobra"
 )
 
 // parsePkgSpec parses a package spec in the format @namespace/name:version
@@ -46,9 +46,14 @@ func loginCmd() *cobra.Command {
 				return err
 			}
 
-			config.AppConfig.AccessToken = tokenResp.AccessToken
-			config.AppConfig.RefreshToken = tokenResp.RefreshToken
-			config.Save()
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+
+			cfg.AccessToken = tokenResp.AccessToken
+			cfg.RefreshToken = tokenResp.RefreshToken
+			config.Save(cfg)
 			fmt.Printf("\n\nSuccess! Access token saved\n")
 
 			return nil
@@ -121,7 +126,11 @@ func getPkgCmd() *cobra.Command {
 				return err
 			}
 
-			cacheDir := config.AppConfig.TypstCachePkgPath
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			cacheDir := cfg.TypstCachePkgPath
 
 			if cacheDir != "" {
 				fmt.Printf("Package extracted to: %s\n", filepath.Join(cacheDir, namespace, name, version))
@@ -141,7 +150,12 @@ func listCachedCmd() *cobra.Command {
 		Long:  "List all packages downloaded and cached in the local package cache",
 		Args:  cobra.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cacheDir := config.AppConfig.TypstCachePkgPath
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+
+			cacheDir := cfg.TypstCachePkgPath
 			if cacheDir == "" {
 				return fmt.Errorf("typst cache directory not configured")
 			}
@@ -198,19 +212,22 @@ func removeCachedCmd() *cobra.Command {
 		Short: "Remove a cached package",
 		Long:  "Remove a locally cached package from the cache directory",
 		Args:  cobra.ExactArgs(1),
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			pkgSpec := args[0]
 			namespace, name, version := parsePkgSpec(pkgSpec)
 
 			if namespace == "" || name == "" || version == "" {
-				fmt.Println("invalid package spec: use format @namespace/name:version")
-				return
+				return fmt.Errorf("invalid package spec: use format @namespace/name:version")
 			}
 
-			cacheDir := config.AppConfig.TypstCachePkgPath
+			cfg, err := config.Load()
+			if err != nil {
+				return fmt.Errorf("typst cache directory not configured")
+			}
+
+			cacheDir := cfg.TypstCachePkgPath
 			if cacheDir == "" {
-				fmt.Println("typst cache directory not configured")
-				return
+				return fmt.Errorf("typst cache directory not configured")
 			}
 
 			pkgDir := filepath.Join(cacheDir, namespace, name, version)
@@ -219,23 +236,20 @@ func removeCachedCmd() *cobra.Command {
 			info, err := os.Stat(pkgDir)
 			if err != nil {
 				if os.IsNotExist(err) {
-					fmt.Printf("package @%s/%s:%s not found in cache", namespace, name, version)
-					return
+					return fmt.Errorf("package @%s/%s:%s not found in cache", namespace, name, version)
 				}
-				fmt.Printf("failed to check package: %v", err)
-				return
+				return fmt.Errorf("failed to check package: %v", err)
 			}
 			if !info.IsDir() {
-				fmt.Printf("package @%s/%s:%s is not a directory", namespace, name, version)
-				return
+				return fmt.Errorf("package @%s/%s:%s is not a directory", namespace, name, version)
 			}
 
 			if err := os.RemoveAll(pkgDir); err != nil {
-				fmt.Printf("failed to remove package: %v", err)
-				return
+				return fmt.Errorf("failed to remove package: %v", err)
 			}
 
 			fmt.Printf("Removed @%s/%s:%s from cache\n", namespace, name, version)
+			return nil
 		},
 	}
 
@@ -354,8 +368,13 @@ The package must be a valid Typst package archive created with the bundle comman
 				return fmt.Errorf("%s is a directory, not a package file", packagePath)
 			}
 
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+
 			// Check if user is logged in
-			if config.AppConfig.AccessToken == "" {
+			if cfg.AccessToken == "" {
 				return fmt.Errorf("not logged in. Please run 'tpix login' first")
 			}
 
@@ -493,15 +512,22 @@ If neither is set, the default path is used:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			flagSet := cmd.Flags().Changed("set")
 
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+
 			if flagSet {
 				// Flag was explicitly set
 				if setPath == "" {
 					// Empty string - clear and let Save() use detected default
-					config.AppConfig.TypstCachePkgPath = ""
-					if err := config.Save(); err != nil {
+					cfg.TypstCachePkgPath = ""
+					if err := config.Save(cfg); err != nil {
 						return fmt.Errorf("failed to save config: %w", err)
 					}
-					fmt.Printf("Cache path reset to: %s\n", config.AppConfig.TypstCachePkgPath)
+					cfg, _ = config.Load()
+
+					fmt.Printf("Cache path reset to: %s\n", cfg.TypstCachePkgPath)
 					return nil
 				}
 
@@ -517,15 +543,17 @@ If neither is set, the default path is used:
 					return fmt.Errorf("path is not a directory: %s", setPath)
 				}
 
-				config.AppConfig.TypstCachePkgPath = setPath
-				if err := config.Save(); err != nil {
+				cfg.TypstCachePkgPath = setPath
+				if err := config.Save(cfg); err != nil {
 					return fmt.Errorf("failed to save config: %w", err)
 				}
-				fmt.Printf("Cache path set to: %s\n", setPath)
+				cfg, _ = config.Load()
+
+				fmt.Printf("Cache path set to: %s\n", cfg.TypstCachePkgPath)
 				return nil
 			}
 
-			cacheDir := config.AppConfig.TypstCachePkgPath
+			cacheDir := cfg.TypstCachePkgPath
 			if cacheDir == "" {
 				return fmt.Errorf("cache directory not configured")
 			}

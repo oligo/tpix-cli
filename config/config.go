@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -11,6 +10,7 @@ import (
 const (
 	appName        = "tpix-cli"
 	configFilename = "settings.json"
+	cachePathEnv   = "TYPST_PACKAGE_CACHE_PATH"
 )
 
 type Config struct {
@@ -20,7 +20,6 @@ type Config struct {
 }
 
 var (
-	AppConfig Config
 	configDir string
 )
 
@@ -34,30 +33,53 @@ func init() {
 	configDir = dir
 }
 
-func Load() error {
+func Load() (Config, error) {
 	path := filepath.Join(configDir, configFilename)
 
 	configFile, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
-		return err
+		return Config{}, err
 	}
 
 	defer configFile.Close()
 
-	err = json.NewDecoder(configFile).Decode(&AppConfig)
-	if err != nil {
-		return err
+	var appConfig Config
+
+	err = json.NewDecoder(configFile).Decode(&appConfig)
+	if err != nil && err.Error() != "EOF" {
+		return Config{}, err
 	}
 
-	if AppConfig.TypstCachePkgPath == "" {
-		AppConfig.TypstCachePkgPath = detectCacheDir()
+	// If user provided a env variable, use it instead of the one in the config file
+	envPath := os.Getenv(cachePathEnv)
+	if envPath != "" {
+		info, err := os.Stat(envPath)
+		if err != nil {
+			return appConfig, fmt.Errorf("Invalid path for %s: %s", cachePathEnv, envPath)
+		}
+		if !info.IsDir() {
+			return appConfig, fmt.Errorf("Path is not a directory: %s", envPath)
+		}
+
+		absPath, err := filepath.Abs(envPath)
+		if err != nil {
+			return appConfig, err
+		}
+
+		appConfig.TypstCachePkgPath = absPath
+		return appConfig, nil
 	}
 
-	return nil
+	// No env is set, try to use a detected cache path.
+	if appConfig.TypstCachePkgPath == "" {
+		appConfig.TypstCachePkgPath = defaultCacheDir()
+	}
+
+	return appConfig, nil
 
 }
 
-func Save() error {
+func Save(cfg Config) error {
 	path := filepath.Join(configDir, configFilename)
 	configFile, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
@@ -66,11 +88,11 @@ func Save() error {
 
 	defer configFile.Close()
 
-	if AppConfig.TypstCachePkgPath == "" {
-		AppConfig.TypstCachePkgPath = detectCacheDir()
+	if cfg.TypstCachePkgPath == "" {
+		cfg.TypstCachePkgPath = defaultCacheDir()
 	}
 
-	err = json.NewEncoder(configFile).Encode(&AppConfig)
+	err = json.NewEncoder(configFile).Encode(&cfg)
 	if err != nil {
 		return err
 	}
@@ -118,18 +140,4 @@ func defaultCacheDir() string {
 	}
 
 	return cacheDir
-}
-
-func detectCacheDir() string {
-	envPath := os.Getenv("TYPST_PACKAGE_CACHE_PATH")
-	if envPath == "" || !fs.ValidPath(envPath) {
-		return defaultCacheDir()
-	}
-
-	absPath, err := filepath.Abs(envPath)
-	if err != nil {
-		return defaultCacheDir()
-	}
-
-	return absPath
 }

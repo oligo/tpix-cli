@@ -33,16 +33,27 @@ func makeRequest(method, url string, body io.Reader, contentType string) (*http.
 		}
 	}
 
-	resp, err := doRequest(method, url, bodyBytes, contentType)
+	cfg, err := config.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := doRequest(method, url, bodyBytes, contentType, cfg.AccessToken)
 	if err != nil {
 		return nil, err
 	}
 
 	// If 401 and we have a refresh token, try to refresh and retry
-	if resp.StatusCode == http.StatusUnauthorized && config.AppConfig.RefreshToken != "" {
+	if resp.StatusCode == http.StatusUnauthorized && cfg.RefreshToken != "" {
 		resp.Body.Close()
-		if refreshErr := refreshAccessToken(); refreshErr == nil {
-			return doRequest(method, url, bodyBytes, contentType)
+		if refreshErr := refreshAccessToken(cfg); refreshErr == nil {
+			// reload config
+			cfg, err := config.Load()
+			if err != nil {
+				return nil, err
+			}
+
+			return doRequest(method, url, bodyBytes, contentType, cfg.AccessToken)
 		}
 	}
 
@@ -50,7 +61,7 @@ func makeRequest(method, url string, body io.Reader, contentType string) (*http.
 }
 
 // doRequest executes a single HTTP request without retry logic.
-func doRequest(method, url string, bodyBytes []byte, contentType string) (*http.Response, error) {
+func doRequest(method, url string, bodyBytes []byte, contentType string, accessToken string) (*http.Response, error) {
 	apiUrl := fmt.Sprintf("%s%s", TpixServer, url)
 
 	var bodyReader io.Reader
@@ -63,8 +74,8 @@ func doRequest(method, url string, bodyBytes []byte, contentType string) (*http.
 		return nil, err
 	}
 
-	if config.AppConfig.AccessToken != "" {
-		req.Header.Set("Authorization", "Bearer "+config.AppConfig.AccessToken)
+	if accessToken != "" {
+		req.Header.Set("Authorization", "Bearer "+accessToken)
 	}
 
 	req.Header.Set("User-Agent", TpixClientUserAgent)
@@ -77,15 +88,15 @@ func doRequest(method, url string, bodyBytes []byte, contentType string) (*http.
 
 // refreshAccessToken uses the stored refresh token to obtain a new access token.
 // On success, it updates the config with both new tokens and persists them.
-func refreshAccessToken() error {
+func refreshAccessToken(cfg config.Config) error {
 	refreshMu.Lock()
 	defer refreshMu.Unlock()
 
 	reqBody, _ := json.Marshal(map[string]string{
-		"refresh_token": config.AppConfig.RefreshToken,
+		"refresh_token": cfg.RefreshToken,
 	})
 
-	resp, err := doRequest("POST", "/auth/token/refresh", reqBody, "application/json")
+	resp, err := doRequest("POST", "/auth/token/refresh", reqBody, "application/json", "")
 	if err != nil {
 		return err
 	}
@@ -93,8 +104,8 @@ func refreshAccessToken() error {
 
 	if resp.StatusCode != http.StatusOK {
 		// Refresh failed — clear refresh token so we don't keep retrying
-		config.AppConfig.RefreshToken = ""
-		config.Save()
+		cfg.RefreshToken = ""
+		config.Save(cfg)
 		return fmt.Errorf("token refresh failed with status %d", resp.StatusCode)
 	}
 
@@ -103,9 +114,9 @@ func refreshAccessToken() error {
 		return err
 	}
 
-	config.AppConfig.AccessToken = tokenResp.AccessToken
+	cfg.AccessToken = tokenResp.AccessToken
 	if tokenResp.RefreshToken != "" {
-		config.AppConfig.RefreshToken = tokenResp.RefreshToken
+		cfg.RefreshToken = tokenResp.RefreshToken
 	}
-	return config.Save()
+	return config.Save(cfg)
 }

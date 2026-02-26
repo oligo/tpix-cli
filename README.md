@@ -68,7 +68,7 @@ tpix cache-path --set /custom/path
 tpix cache-path --set ""
 ```
 
-The cache directory can also be set via the `TYPST_PACKAGE_CACHE_PATH` environment variable.
+The cache directory can also be set via the `TYPST_PACKAGE_CACHE_PATH` environment variable, which takes precedence over the saved config value.
 
 
 ### Search & Discovery

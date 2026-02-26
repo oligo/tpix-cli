@@ -74,7 +74,12 @@ func DownloadPackage(namespace, name, version string) error {
 	}
 
 	// Extract to cache directory
-	cacheDir := config.AppConfig.TypstCachePkgPath
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+
+	cacheDir := cfg.TypstCachePkgPath
 	if cacheDir == "" {
 		return fmt.Errorf("typst cache directory not configured")
 	}
