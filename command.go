@@ -472,3 +472,69 @@ func updateCmd() *cobra.Command {
 
 	return cmd
 }
+
+// cachePathCmd prints the cache directory path.
+func cachePathCmd() *cobra.Command {
+	var setPath string
+
+	cmd := &cobra.Command{
+		Use:   "cache-path",
+		Short: "Print or set the cache directory path",
+		Long: `Print or set the path where Typst packages are cached.
+
+The cache path can be set via:
+  1. The --set flag: tpix cache-path --set /custom/path
+  2. The TYPST_PACKAGE_CACHE_PATH environment variable
+
+If neither is set, the default path is used:
+  - Linux/macOS: ~/.cache/typst/packages
+  - Windows: %LOCALAPPDATA%\typst\packages`,
+		Args: cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			flagSet := cmd.Flags().Changed("set")
+
+			if flagSet {
+				// Flag was explicitly set
+				if setPath == "" {
+					// Empty string - clear and let Save() use detected default
+					config.AppConfig.TypstCachePkgPath = ""
+					if err := config.Save(); err != nil {
+						return fmt.Errorf("failed to save config: %w", err)
+					}
+					fmt.Printf("Cache path reset to: %s\n", config.AppConfig.TypstCachePkgPath)
+					return nil
+				}
+
+				// Validate path - check if it exists and is a directory
+				info, err := os.Stat(setPath)
+				if err != nil {
+					if os.IsNotExist(err) {
+						return fmt.Errorf("path does not exist: %s", setPath)
+					}
+					return fmt.Errorf("invalid path: %w", err)
+				}
+				if !info.IsDir() {
+					return fmt.Errorf("path is not a directory: %s", setPath)
+				}
+
+				config.AppConfig.TypstCachePkgPath = setPath
+				if err := config.Save(); err != nil {
+					return fmt.Errorf("failed to save config: %w", err)
+				}
+				fmt.Printf("Cache path set to: %s\n", setPath)
+				return nil
+			}
+
+			cacheDir := config.AppConfig.TypstCachePkgPath
+			if cacheDir == "" {
+				return fmt.Errorf("cache directory not configured")
+			}
+			fmt.Println(cacheDir)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVar(&setPath, "set", "", "Set a custom cache path")
+
+	return cmd
+}

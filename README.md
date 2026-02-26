@@ -4,6 +4,16 @@ A command-line client for managing Typst packages on the [TPIX](https://tpix.typ
 
 ## Installation
 
+You can user the install script to download and install the latest stable version if you are using Linux or MacOS:
+
+```bash
+curl -fsSL https://tpix.typstify.com/install.sh | bash
+```
+
+You can also download pre-built binaries from the [GitHub Releases](https://github.com/typstify/tpix-cli/releases) page.
+
+For developers, use the following command to install tpix-cli:
+
 ```bash
 go install github.com//tpix-cli@latest
 ```
@@ -16,8 +26,7 @@ cd tpix-cli
 make install
 ```
 
-The binary will be built as `tpix` and installed in `/usr/local/bin/` in Linux.
-You can also download pre-built binaries from the [GitHub Releases](https://github.com/typstify/tpix-cli/releases) page.
+The binary will be built as `tpix` and installed in `/usr/local/bin/` in Linux and MacOS.
 
 
 ## Quick Start
@@ -45,6 +54,22 @@ tpix login
 ```
 
 Login using OAuth 2.0 device flow. Required for uploading packages.
+
+### Configuration
+
+```bash
+# Print cache directory path
+tpix cache-path
+
+# Set custom cache directory
+tpix cache-path --set /custom/path
+
+# Reset to default cache directory
+tpix cache-path --set ""
+```
+
+The cache directory can also be set via the `TYPST_PACKAGE_CACHE_PATH` environment variable.
+
 
 ### Search & Discovery
 
@@ -140,10 +165,6 @@ tpix version
 tpix update
 ```
 
-## Configuration
-
-- **Config file**: `~/.config/tpix-cli/settings.json`
-- **Package cache**: `~/.cache/typst/packages/` (configurable)
 
 ## Output Format
 

@@ -28,6 +28,7 @@ func main() {
 	rootCmd.AddCommand(pushCmd())
 	rootCmd.AddCommand(versionCmd())
 	rootCmd.AddCommand(updateCmd())
+	rootCmd.AddCommand(cachePathCmd())
 
 	rootCmd.Execute()
 }

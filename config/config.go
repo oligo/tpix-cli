@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 )
@@ -49,7 +50,7 @@ func Load() error {
 	}
 
 	if AppConfig.TypstCachePkgPath == "" {
-		AppConfig.TypstCachePkgPath = defaultCacheDir()
+		AppConfig.TypstCachePkgPath = detectCacheDir()
 	}
 
 	return nil
@@ -66,7 +67,7 @@ func Save() error {
 	defer configFile.Close()
 
 	if AppConfig.TypstCachePkgPath == "" {
-		AppConfig.TypstCachePkgPath = defaultCacheDir()
+		AppConfig.TypstCachePkgPath = detectCacheDir()
 	}
 
 	err = json.NewEncoder(configFile).Encode(&AppConfig)
@@ -117,4 +118,18 @@ func defaultCacheDir() string {
 	}
 
 	return cacheDir
+}
+
+func detectCacheDir() string {
+	envPath := os.Getenv("TYPST_PACKAGE_CACHE_PATH")
+	if envPath == "" || !fs.ValidPath(envPath) {
+		return defaultCacheDir()
+	}
+
+	absPath, err := filepath.Abs(envPath)
+	if err != nil {
+		return defaultCacheDir()
+	}
+
+	return absPath
 }
