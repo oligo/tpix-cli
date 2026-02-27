@@ -56,6 +56,20 @@ type UploadResponse struct {
 	ValidateReport []string `json:"report"`
 }
 
+// DependencyInfo represents a single package dependency
+type DependencyInfo struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+}
+
+// DependenciesResponse represents the dependencies endpoint response
+type DependenciesResponse struct {
+	Package      string           `json:"package"`
+	Version      string           `json:"version"`
+	Dependencies []DependencyInfo `json:"dependencies"`
+}
+
 // ErrorResponse represents a standard error response
 type ErrorResponse struct {
 	Error       string `json:"error"`
