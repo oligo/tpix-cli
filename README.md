@@ -87,12 +87,27 @@ tpix search "chart" -l 10
 ### Download Packages
 
 ```bash
-# Download latest version
+# Download latest version (with transitive dependencies)
 tpix get @namespace/package-name
 
 # Download specific version
 tpix get @namespace/package-name:1.0.0
+
+# Download without fetching dependencies
+tpix get @namespace/package-name:1.0.0 --no-deps
 ```
+
+### Pull Project Dependencies
+
+```bash
+# Scan current directory for .typ imports and fetch all dependencies
+tpix pull
+
+# Preview what would be fetched without downloading
+tpix pull --dry-run
+```
+
+`tpix pull` recursively scans all `.typ` files in the current directory for `#import "@namespace/name:version"` statements, then downloads each package along with its transitive dependencies. Already-cached packages are skipped.
 
 ### Package Info
 
