@@ -142,6 +142,28 @@ func fetchPackageVersions(namespace, name string) ([]PackageVersionInfo, error) 
 	return versionsResp.Versions, nil
 }
 
+// FetchDependencies fetches the dependencies for a specific package version.
+func FetchDependencies(namespace, name, version string) ([]DependencyInfo, error) {
+	url := fmt.Sprintf("/api/v1/packages/%s/%s/%s/dependencies", namespace, name, version)
+	resp, err := makeRequest("GET", url, nil, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch dependencies: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to get dependencies: %s", string(body))
+	}
+
+	var depsResp DependenciesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&depsResp); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	return depsResp.Dependencies, nil
+}
+
 // UploadPackage uploads a package to the TPIX server.
 func UploadPackage(packagePath, namespace string) (*UploadResponse, error) {
 	file, err := os.Open(packagePath)

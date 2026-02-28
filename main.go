@@ -21,6 +21,7 @@ func main() {
 	rootCmd.AddCommand(loginCmd())
 	rootCmd.AddCommand(searchPkgCmd())
 	rootCmd.AddCommand(getPkgCmd())
+	rootCmd.AddCommand(pullCmd())
 	rootCmd.AddCommand(queryPkgCmd())
 	rootCmd.AddCommand(listCachedCmd())
 	rootCmd.AddCommand(removeCachedCmd())

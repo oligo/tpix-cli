@@ -10,6 +10,7 @@ import (
 	"github.com/typstify/tpix-cli/api"
 	"github.com/typstify/tpix-cli/bundler"
 	"github.com/typstify/tpix-cli/config"
+	"github.com/typstify/tpix-cli/deps"
 	"github.com/typstify/tpix-cli/version"
 )
 
@@ -96,8 +97,56 @@ func searchPkgCmd() *cobra.Command {
 	return cmd
 }
 
+// isPackageCached checks if a package version is already in the local cache.
+func isPackageCached(cacheDir, namespace, name, version string) bool {
+	pkgDir := filepath.Join(cacheDir, namespace, name, version)
+	info, err := os.Stat(pkgDir)
+	return err == nil && info.IsDir()
+}
+
+// fetchWithDeps downloads a package and its transitive dependencies.
+// visited tracks already-processed packages to prevent infinite loops.
+func fetchWithDeps(namespace, name, version, cacheDir string, visited map[string]bool, noDeps bool) error {
+	key := fmt.Sprintf("@%s/%s:%s", namespace, name, version)
+	if visited[key] {
+		return nil
+	}
+	visited[key] = true
+
+	if isPackageCached(cacheDir, namespace, name, version) {
+		fmt.Printf("  Already cached: %s\n", key)
+		// Do not return early, check if dependencies are satisfied.
+	} else {
+		fmt.Printf("  Downloading %s...\n", key)
+		if err := api.DownloadPackage(namespace, name, version); err != nil {
+			return fmt.Errorf("failed to download %s: %w", key, err)
+		}
+	}
+
+	if noDeps {
+		return nil
+	}
+
+	// Fetch and resolve transitive dependencies
+	depInfos, err := api.FetchDependencies(namespace, name, version)
+	if err != nil {
+		// Non-fatal: the server may not have dependency data for older packages
+		return nil
+	}
+
+	for _, dep := range depInfos {
+		if err := fetchWithDeps(dep.Namespace, dep.Name, dep.Version, cacheDir, visited, false); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // getPkgCmd download Typst packages from TPIX server.
 func getPkgCmd() *cobra.Command {
+	var noDeps bool
+
 	cmd := &cobra.Command{
 		Use:   "get <namespace/name:version>",
 		Short: "Download a package from TPIX server",
@@ -120,24 +169,98 @@ func getPkgCmd() *cobra.Command {
 				version = pkg.Versions[len(pkg.Versions)-1].Version
 			}
 
-			fmt.Printf("Downloading @%s/%s version %s...\n", namespace, name, version)
-
-			if err := api.DownloadPackage(namespace, name, version); err != nil {
-				return err
-			}
-
 			cfg, err := config.Load()
 			if err != nil {
 				return err
 			}
 			cacheDir := cfg.TypstCachePkgPath
-
-			if cacheDir != "" {
-				fmt.Printf("Package extracted to: %s\n", filepath.Join(cacheDir, namespace, name, version))
+			if cacheDir == "" {
+				return fmt.Errorf("typst cache directory not configured")
 			}
+
+			fmt.Printf("Resolving @%s/%s:%s...\n", namespace, name, version)
+			visited := make(map[string]bool)
+			if err := fetchWithDeps(namespace, name, version, cacheDir, visited, noDeps); err != nil {
+				return err
+			}
+
+			fmt.Printf("Done. %d package(s) resolved.\n", len(visited))
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&noDeps, "no-deps", false, "Skip fetching transitive dependencies")
+
+	return cmd
+}
+
+// pullCmd scans the current project for .typ imports and fetches all dependencies.
+func pullCmd() *cobra.Command {
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:   "pull",
+		Short: "Fetch all package dependencies for the current project",
+		Long: `Scan the current directory recursively for .typ files, discover all
+#import "@namespace/name:version" references, and download each package
+along with its transitive dependencies.
+
+Use --dry-run to see what would be fetched without downloading anything.`,
+		Args: cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.Load()
+			if err != nil {
+				return err
+			}
+			cacheDir := cfg.TypstCachePkgPath
+			if cacheDir == "" {
+				return fmt.Errorf("typst cache directory not configured")
+			}
+
+			// Scan current directory for .typ imports
+			cwd, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to get working directory: %w", err)
+			}
+
+			fmt.Printf("Scanning %s for package imports...\n", cwd)
+			discovered, err := deps.ExtractFromDirectory(cwd)
+			if err != nil {
+				return fmt.Errorf("failed to scan for imports: %w", err)
+			}
+
+			if len(discovered) == 0 {
+				fmt.Println("No package imports found.")
+				return nil
+			}
+
+			fmt.Printf("Found %d direct dependency(ies).\n", len(discovered))
+
+			if dryRun {
+				for _, dep := range discovered {
+					cached := isPackageCached(cacheDir, dep.Namespace, dep.Name, dep.Version)
+					status := "missing"
+					if cached {
+						status = "cached"
+					}
+					fmt.Printf("  %s [%s]\n", dep.Key(), status)
+				}
+				return nil
+			}
+
+			visited := make(map[string]bool)
+			for _, dep := range discovered {
+				if err := fetchWithDeps(dep.Namespace, dep.Name, dep.Version, cacheDir, visited, false); err != nil {
+					return err
+				}
+			}
+
+			fmt.Printf("Done. %d package(s) resolved.\n", len(visited))
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Show what would be fetched without downloading")
 
 	return cmd
 }
