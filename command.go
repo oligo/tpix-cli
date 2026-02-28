@@ -115,12 +115,12 @@ func fetchWithDeps(namespace, name, version, cacheDir string, visited map[string
 
 	if isPackageCached(cacheDir, namespace, name, version) {
 		fmt.Printf("  Already cached: %s\n", key)
-		return nil
-	}
-
-	fmt.Printf("  Downloading %s...\n", key)
-	if err := api.DownloadPackage(namespace, name, version); err != nil {
-		return fmt.Errorf("failed to download %s: %w", key, err)
+		// Do not return early, check if dependencies are satisfied.
+	} else {
+		fmt.Printf("  Downloading %s...\n", key)
+		if err := api.DownloadPackage(namespace, name, version); err != nil {
+			return fmt.Errorf("failed to download %s: %w", key, err)
+		}
 	}
 
 	if noDeps {
